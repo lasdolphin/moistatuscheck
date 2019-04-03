@@ -15,3 +15,4 @@
 
 1. export variables ```region``` and ```function_name```
 2. use deploy.sh script with package archive name as an argument
+```./deploy.sh package.zip```
