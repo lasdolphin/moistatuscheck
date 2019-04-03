@@ -1,6 +1,6 @@
 # prepare environment
 
-1. you need to build packages on AWS Amazon Linux
+1. you need to build packages on AWS Amazon Linux with python 3+
 
     ```mkdir package
     cd package
@@ -10,3 +10,8 @@
     zip -r9 ../package.zip .```
 
 2. upload package to lambda
+
+# deployment
+
+1. export variables ```region``` and ```function_name```
+2. use deploy.sh script with package archive name as an argument
