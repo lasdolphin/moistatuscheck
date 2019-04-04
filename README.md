@@ -6,7 +6,7 @@
     cd package
     pip install -t . pandas
     pip install -t . xlrd
-    cp lambda_function.py .
+    cp ../lambda_function.py .
     zip -r9 ../package.zip .```
 
 2. upload package to lambda
