@@ -1,3 +1,3 @@
 #!/bin/bash
-zip -g moicheck.zip lambda_function.py
-aws lambda --region eu-central-1 update-function-code --function-name MOIStatusCheck --zip-file fileb://moicheck.zip
+zip -g $1 lambda_function.py
+aws lambda --region $region update-function-code --function-name $function_name --zip-file fileb://$1
