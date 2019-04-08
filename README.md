@@ -9,7 +9,6 @@
     cp ../lambda_function.py .
     zip -r9 ../package.zip .```
 
-2. upload package to lambda
 
 # deployment
 
