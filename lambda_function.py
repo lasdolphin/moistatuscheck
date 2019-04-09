@@ -2,11 +2,13 @@
 import os
 import json
 import boto3
+import botocore
 import re
 import argparse
 import pandas as pd
-import urllib.request
+from urllib.request import Request, urlopen
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 import datetime
 import shutil
 
@@ -43,9 +45,10 @@ FORMAT_MSG = """
     then you will search for OAM-334/PP-2015.
     Found result will be as follows: OAM-334/PP-2015.
 """
-LOCAL_FILE = "/tmp/tmp.xls"
+LOCAL_FILE = "/tmp"
 
 def save_update_id(update_id):
+
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
     table.update_item(
@@ -58,7 +61,9 @@ def save_update_id(update_id):
         }
     )
 
+
 def read_update_id():
+
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
     response = table.get_item(
@@ -68,21 +73,38 @@ def read_update_id():
     )
     return response['Item']['update_id']
 
+
 def toOrdinalNum(n):
 
     return str(n) + {1: 'st', 2: 'nd', 3: 'rd'}.get(4 if 10 <= n % 100 < 20 else n % 10, "th")
+
 
 def define_excel_sheet(case_num):
 
     case_type = case_num.split('/')[1].split('-')[0]
     return case_types[case_type]
 
+
 def check_format(case_num):
 
     pattern = re.compile('^OAM-[^0]\d+/(DP|PP|DV|ZM|TP)-\d{4}$')
     return bool(pattern.match(case_num))
 
-def get_source_file(tmp_file):
+def empty_bucket(bucket_name):
+
+    print('Clean up in bucket {}'.format(bucket_name))
+    s3 = boto3.resource('s3')
+    try:
+        bucket = s3.Bucket(bucket_name)
+        bucket.objects.all().delete()
+        print('Bucket {} clean.'.format(bucket_name))
+        return True
+    except botocore.exceptions.ClientError as e:
+        print('Bucket was not cleaned. With error: {}'.format(e))
+        return False
+
+
+def source_file_url():
 
     revert_days = 0
     month = datetime.datetime.today().strftime("%B").lower()
@@ -91,18 +113,46 @@ def get_source_file(tmp_file):
     while True:
         day = toOrdinalNum(int(datetime.datetime.today().strftime("%d"))-revert_days)
         url = "https://www.mvcr.cz/mvcren/file/list-valid-to-the-{}-{}-{}.aspx".format(month,day,year)
-        # print(url)
+        print(url)
         try:
-            page = urllib.request.urlopen(url)
-            break
-        except urllib.error.HTTPError as e:
+            head = urlopen(Request(url, method='HEAD'))
+            return head.info()['Content-Disposition'].split('=')[1].strip('"'), url
+        except HTTPError as e:
+            print('HTTP error {}'.format(e))
+            print('Chaecking previous day')
             revert_days += 1
+
+
+def source_file_S3(filename, url):
+
+    s3 = boto3.resource('s3')
+    try:
+        s3.Bucket(os.environ["BUCKET"]).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
+        print('File taken from s3 bucket')
+        return "{}/{}".format(LOCAL_FILE, filename)
+    except botocore.exceptions.ClientError as e:
+        return source_file_download(filename, url)
+
+
+def source_file_download(filename, url):
+
+    print("Downloading source file from website")
+    s3 = boto3.client('s3')
     # print(page.getcode())
-    f = open("{}".format(tmp_file), "wb")
+    page = urlopen(url)
+    f = open("{}/{}".format(LOCAL_FILE, filename), "wb")
     shutil.copyfileobj(page, f)
     f.close()
+    empty_bucket(os.environ['BUCKET'])
+    try:
+        print('Saving to s3 bucket - {}'.format(os.environ['BUCKET']))
+        s3.upload_file("{}/{}".format(LOCAL_FILE, filename), os.environ['BUCKET'], filename)
+    except botocore.exceptions.ClientError as e:
+        print("Couldn't upload to s3 {}/{}". format(os.environ['BUCKET'], filename))
+    return "{}/{}".format(LOCAL_FILE, filename)
 
-def process_source_file(tmp_file, target):
+
+def source_file_process(tmp_file, target):
 
     print('Case type is {}.'.format(define_excel_sheet(target)))
     sheet_num = define_excel_sheet(target)
@@ -119,20 +169,23 @@ def process_source_file(tmp_file, target):
         answer = "Record(s) \n {}\nwas found in MOI status file".format(value)
     return answer
 
+
 def send_reply(a, chat_id):
+
     tlg_endpoint = "https://api.telegram.org/bot{}/sendMessage".format(os.environ['TOKEN'])
     post_fields = {'chat_id': chat_id, 'text': a}
-    request = urllib.request.Request(tlg_endpoint, urlencode(post_fields).encode())
-    json = urllib.request.urlopen(request).read().decode()
+    request = Request(tlg_endpoint, urlencode(post_fields).encode())
+    json = urlopen(request).read().decode()
     return json
+
 
 def main(target, chat_id):
 
-    get_source_file(LOCAL_FILE)
-    answer = process_source_file(LOCAL_FILE, target)
+    filename, url = source_file_url()
+    path = source_file_S3(filename, url)
+    answer = source_file_process(path, target)
     print(answer)
     send_reply(answer, chat_id)
-
 
 
 def lambda_handler(event, context):
@@ -141,8 +194,9 @@ def lambda_handler(event, context):
         save_update_id(int(event['update_id']))
         chat_id = event['message']['chat']['id']
         target = event['message']['text'].upper()
-        print('checking format')
+        print('Checking format')
         if check_format(target):
+            print('Format OK. Starting...')
             main(target, chat_id)
         else:
             return send_reply(FORMAT_MSG, chat_id)
