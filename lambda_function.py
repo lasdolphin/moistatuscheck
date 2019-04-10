@@ -1,5 +1,6 @@
 
 import os
+import sys
 import json
 import boto3
 import botocore
@@ -13,7 +14,6 @@ import datetime
 import shutil
 import logging
 
-
 # TODO
 # schedule check in lambda
 # add bot command to accept case number
@@ -24,6 +24,7 @@ import logging
 # add command /info
 # programm command /status
 # add some stuff to answer on simple messages
+# investigate why locally log level not applying, but works with basicConfig
 #x added fully functioning local run with params
 #x add format check
 #x added webhook and bot request functionality
@@ -206,9 +207,7 @@ def main(target, chat_id):
 
 
 def lambda_handler(event, context):
-    level = os.environ['LOGLEVEL']
-    logger = set_logger(level)
-    logger.info('Log level set to {}'.format(level))
+
     table_name = os.environ['DB_TABLE_NAME']
 
     logger.info(event)
@@ -226,17 +225,38 @@ def lambda_handler(event, context):
         logger.info('This is already processed')
 
 if __name__ == "__main__":
-    level = os.environ['LOGLEVEL']
-    logger = set_logger(level)
-    logger.info('Log level set to {}'.format(level))
+    # setting up logger for local run
+    lvl = os.environ['LOGLEVEL']
+    if lvl == 'INFO':
+        logging.basicConfig(level=logging.INFO)
+    elif lvl == 'DEBUG':
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARN)
+    logger = logging.getLogger()
+    logger.warning('Logging set to {}'.format(lvl))
+
+    # parsing args
     parser = argparse.ArgumentParser()
     parser.add_argument("target", help="case number we are checking",
                     type=str)
     parser.add_argument("chat_id", help="telegram chat_id to send reply",
                     type=str)
     args = parser.parse_args()
+
     if check_format(args.target.upper()):
         print('Looking for {}'.format(args.target))
         main(args.target.upper(), args.chat_id)
     else:
         print(FORMAT_MSG)
+else:
+    # setting up logger for lambda
+    lvl = os.environ['LOGLEVEL']
+    logger = logging.getLogger()
+    if lvl == 'INFO':
+        logger.setLevel(logging.INFO)
+    elif lvl == 'DEBUG':
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.WARN)
+    logger.warning('Logging set to {}'.format(lvl))
