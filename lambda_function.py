@@ -47,10 +47,10 @@ FORMAT_MSG = """
 """
 LOCAL_FILE = "/tmp"
 
-def save_update_id(update_id):
+def save_update_id(update_id, table_name):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+    table = dynamodb.Table(table_name)
     table.update_item(
         Key={
             'id': '1'
@@ -62,10 +62,10 @@ def save_update_id(update_id):
     )
 
 
-def read_update_id():
+def read_update_id(table_name):
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+    table = dynamodb.Table(table_name)
     response = table.get_item(
         Key={
             'id': '1',
@@ -118,23 +118,23 @@ def source_file_url():
             head = urlopen(Request(url, method='HEAD'))
             return head.info()['Content-Disposition'].split('=')[1].strip('"'), url
         except HTTPError as e:
-            print('HTTP error {}'.format(e))
-            print('Chaecking previous day')
+            print('{}'.format(e))
+            print('Checking previous day')
             revert_days += 1
 
 
-def source_file_S3(filename, url):
+def source_file_S3(filename, url, bucket_name):
 
     s3 = boto3.resource('s3')
     try:
-        s3.Bucket(os.environ["BUCKET"]).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
+        s3.Bucket(bucket_name).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
         print('File taken from s3 bucket')
         return "{}/{}".format(LOCAL_FILE, filename)
     except botocore.exceptions.ClientError as e:
-        return source_file_download(filename, url)
+        return source_file_download(filename, url, bucket_name)
 
 
-def source_file_download(filename, url):
+def source_file_download(filename, url, bucket_name):
 
     print("Downloading source file from website")
     s3 = boto3.client('s3')
@@ -143,12 +143,12 @@ def source_file_download(filename, url):
     f = open("{}/{}".format(LOCAL_FILE, filename), "wb")
     shutil.copyfileobj(page, f)
     f.close()
-    empty_bucket(os.environ['BUCKET'])
+    empty_bucket(bucket_name)
     try:
-        print('Saving to s3 bucket - {}'.format(os.environ['BUCKET']))
-        s3.upload_file("{}/{}".format(LOCAL_FILE, filename), os.environ['BUCKET'], filename)
+        print('Saving to s3 bucket - {}'.format(bucket_name))
+        s3.upload_file("{}/{}".format(LOCAL_FILE, filename), bucket_name, filename)
     except botocore.exceptions.ClientError as e:
-        print("Couldn't upload to s3 {}/{}". format(os.environ['BUCKET'], filename))
+        print("Couldn't upload to s3 {}/{}". format(bucket_name, filename))
     return "{}/{}".format(LOCAL_FILE, filename)
 
 
@@ -180,18 +180,22 @@ def send_reply(a, chat_id):
 
 
 def main(target, chat_id):
+    token = os.environ['TOKEN']
+    bucket_name = os.environ['BUCKET']
 
     filename, url = source_file_url()
-    path = source_file_S3(filename, url)
+    path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
     print(answer)
     send_reply(answer, chat_id)
 
 
 def lambda_handler(event, context):
+    table_name = os.environ['DB_TABLE_NAME']
+
     print(event)
-    if event['update_id'] > read_update_id():
-        save_update_id(int(event['update_id']))
+    if event['update_id'] > read_update_id(table_name):
+        save_update_id(int(event['update_id']), table_name)
         chat_id = event['message']['chat']['id']
         target = event['message']['text'].upper()
         print('Checking format')
