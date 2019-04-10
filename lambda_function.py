@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from urllib.error import HTTPError
 import datetime
 import shutil
+import logging
 
 
 # TODO
@@ -23,7 +24,7 @@ import shutil
 # add command /info
 # programm command /status
 # add some stuff to answer on simple messages
-# added fully functioning local run with params
+#x added fully functioning local run with params
 #x add format check
 #x added webhook and bot request functionality
 #x 1. add functionality to pick up correct sheet.
@@ -46,6 +47,17 @@ FORMAT_MSG = """
     Found result will be as follows: OAM-334/PP-2015.
 """
 LOCAL_FILE = "/tmp"
+
+def set_logger(lvl):
+
+    if lvl == 'INFO':
+        logging.basicConfig(level=logging.INFO)
+    elif lvl == 'DEBUG':
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARN)
+    logger = logging.getLogger(__name__)
+    return logger
 
 def save_update_id(update_id, table_name):
 
@@ -92,15 +104,15 @@ def check_format(case_num):
 
 def empty_bucket(bucket_name):
 
-    print('Clean up in bucket {}'.format(bucket_name))
+    logger.info('Clean up in bucket {}'.format(bucket_name))
     s3 = boto3.resource('s3')
     try:
         bucket = s3.Bucket(bucket_name)
         bucket.objects.all().delete()
-        print('Bucket {} clean.'.format(bucket_name))
+        logger.info('Bucket {} clean.'.format(bucket_name))
         return True
     except botocore.exceptions.ClientError as e:
-        print('Bucket was not cleaned. With error: {}'.format(e))
+        logger.info('Bucket was not cleaned. With error: {}'.format(e))
         return False
 
 
@@ -113,13 +125,14 @@ def source_file_url():
     while True:
         day = toOrdinalNum(int(datetime.datetime.today().strftime("%d"))-revert_days)
         url = "https://www.mvcr.cz/mvcren/file/list-valid-to-the-{}-{}-{}.aspx".format(month,day,year)
-        print(url)
+        logger.info(url)
         try:
             head = urlopen(Request(url, method='HEAD'))
+            logger.info('Success: HTTP 200 OK')
             return head.info()['Content-Disposition'].split('=')[1].strip('"'), url
         except HTTPError as e:
-            print('{}'.format(e))
-            print('Checking previous day')
+            logger.info('{}'.format(e))
+            logger.info('Checking previous day')
             revert_days += 1
 
 
@@ -128,7 +141,7 @@ def source_file_S3(filename, url, bucket_name):
     s3 = boto3.resource('s3')
     try:
         s3.Bucket(bucket_name).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
-        print('File taken from s3 bucket')
+        logger.info('File taken from s3 bucket {}'.format(bucket_name))
         return "{}/{}".format(LOCAL_FILE, filename)
     except botocore.exceptions.ClientError as e:
         return source_file_download(filename, url, bucket_name)
@@ -136,29 +149,29 @@ def source_file_S3(filename, url, bucket_name):
 
 def source_file_download(filename, url, bucket_name):
 
-    print("Downloading source file from website")
+    logger.info("Downloading source file from website")
     s3 = boto3.client('s3')
-    # print(page.getcode())
+    # logger.info(page.getcode())
     page = urlopen(url)
     f = open("{}/{}".format(LOCAL_FILE, filename), "wb")
     shutil.copyfileobj(page, f)
     f.close()
     empty_bucket(bucket_name)
     try:
-        print('Saving to s3 bucket - {}'.format(bucket_name))
+        logger.info('Saving to s3 bucket - {}'.format(bucket_name))
         s3.upload_file("{}/{}".format(LOCAL_FILE, filename), bucket_name, filename)
     except botocore.exceptions.ClientError as e:
-        print("Couldn't upload to s3 {}/{}". format(bucket_name, filename))
+        logger.info("Couldn't upload to s3 {}/{}". format(bucket_name, filename))
     return "{}/{}".format(LOCAL_FILE, filename)
 
 
 def source_file_process(tmp_file, target):
 
-    print('Case type is {}.'.format(define_excel_sheet(target)))
+    logger.info('Case type is {}.'.format(define_excel_sheet(target)))
     sheet_num = define_excel_sheet(target)
     df = pd.read_excel(tmp_file, sheet_name=sheet_num, index_col=0, skiprows=6, names=['a','b'])
-    print('Looking for {}'.format(target))
-    # print(df.head())
+    logger.info('Looking for {}'.format(target))
+    # logger.info(df.head())
     df = df[df['b'].notnull()]
     search = df['b'].str.contains(target)
     df = df.loc[search]
@@ -171,11 +184,12 @@ def source_file_process(tmp_file, target):
 
 
 def send_reply(a, chat_id):
-
+    logger.info('Sending reply to {}'.format(chat_id))
     tlg_endpoint = "https://api.telegram.org/bot{}/sendMessage".format(os.environ['TOKEN'])
     post_fields = {'chat_id': chat_id, 'text': a}
     request = Request(tlg_endpoint, urlencode(post_fields).encode())
     json = urlopen(request).read().decode()
+    logger.info('TLG answered {}'.format(json))
     return json
 
 
@@ -187,27 +201,34 @@ def main(target, chat_id):
     path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
     print(answer)
-    send_reply(answer, chat_id)
+    if __name__ != "__main__":
+        send_reply(answer, chat_id)
 
 
 def lambda_handler(event, context):
+    level = os.environ['LOGLEVEL']
+    logger = set_logger(level)
+    logger.info('Log level set to {}'.format(level))
     table_name = os.environ['DB_TABLE_NAME']
 
-    print(event)
+    logger.info(event)
     if event['update_id'] > read_update_id(table_name):
         save_update_id(int(event['update_id']), table_name)
         chat_id = event['message']['chat']['id']
         target = event['message']['text'].upper()
-        print('Checking format')
+        logger.info('Checking format')
         if check_format(target):
-            print('Format OK. Starting...')
+            logger.info('Format OK. Starting...')
             main(target, chat_id)
         else:
             return send_reply(FORMAT_MSG, chat_id)
     else:
-        print('This is already processed')
+        logger.info('This is already processed')
 
 if __name__ == "__main__":
+    level = os.environ['LOGLEVEL']
+    logger = set_logger(level)
+    logger.info('Log level set to {}'.format(level))
     parser = argparse.ArgumentParser()
     parser.add_argument("target", help="case number we are checking",
                     type=str)
@@ -215,6 +236,7 @@ if __name__ == "__main__":
                     type=str)
     args = parser.parse_args()
     if check_format(args.target.upper()):
+        print('Looking for {}'.format(args.target))
         main(args.target.upper(), args.chat_id)
     else:
         print(FORMAT_MSG)
