@@ -13,20 +13,9 @@ import datetime
 import shutil
 import logging
 
-# TODO
-# schedule check in lambda
-# add bot command to accept case number
-# add deployment pipeline on commit
-# add debug info with logger
-# add functionality to catch commands
-# add format checker for input
-# add command /info
-# programm command /status
-# add some stuff to answer on simple messages
-# investigate why locally log level not applying, but works with basicConfig
-#x added fully functioning local run with params
-#x add format check
-#x added webhook and bot request functionality
+
+
+
 #x 1. add functionality to pick up correct sheet.
 #x 5. reverse date picking
 #x 4. send result to telegram
