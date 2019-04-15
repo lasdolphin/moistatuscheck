@@ -1,0 +1,19 @@
+image: amazonlinux:latest
+
+services:
+  - docker:dind
+
+before_script:
+  - echo 'no before scripts'
+
+build-master:
+  stage: build
+  script:
+    - ls -lah moistatuscheck
+    - pip install -t . pandas
+    - pip install -t . xlrd
+    - zip -r9 ../moicheck.zip .
+    - ls -lah moistatuscheck
+    - ls -lah ../
+  only:
+    - master
