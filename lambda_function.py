@@ -163,11 +163,12 @@ def source_file_process(tmp_file, target):
     df = df[df['b'].notnull()]
     search = df['b'].str.contains(target)
     df = df.loc[search]
+    date = tmp_file.split('.')[0].split('_')[2]
     if  df.empty:
-        answer = "Unfortunately your record {} was not found :-(".format(target)
+        answer = "Unfortunately your record {} was not found in file from {} :-(".format(target, date)
     else:
         value = df.to_string(index=False, header=False)
-        answer = "Record(s) \n {}\nwas found in MOI status file".format(value)
+        answer = "Record(s) \n {}\nwas found in MOI status file from {}".format(value,date)
     return answer
 
 
