@@ -1,0 +1,45 @@
+before_script:
+  - echo "no before script"
+
+variables:
+  function_name: "MOIStatusCheck"
+  region: "eu-central-1"
+
+stages:
+  - image
+  - build
+  - deploy
+
+image-docker:
+  image: docker:latest
+  services:
+    - docker:dind
+  stage: image
+  script:
+    - docker login -u "$dockerhub_username" -p "$dockerhub_pass"
+    - docker build --pull -t "lasdolphin/moicheck-amalinux:latest" .
+    - docker push lasdolphin/moicheck-amalinux
+  only:
+    changes:
+      - Dockerfile
+
+build-master:
+  image: lasdolphin/moicheck-amalinux:latest
+  stage: build
+  script:
+    - cp  /home/moicheck.zip .
+    - zip -g moicheck.zip lambda_function.py
+    - ls -lah
+  only:
+    - master
+  artifacts:
+    paths:
+      - moicheck.zip
+
+deploy-master:
+  image: lasdolphin/moicheck-amalinux:latest
+  stage: deploy
+  script:
+    - aws lambda --region $region update-function-code --function-name $function_name --zip-file fileb://moicheck.zip > /dev/null
+  dependencies:
+    - build-master
