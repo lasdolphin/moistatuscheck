@@ -16,15 +16,15 @@ image-docker:
     - docker:dind
   stage: image
   script:
-    - docker login -u "$dockerhub_username" -p "$dockerhub_pass"
-    - docker build --pull -t "lasdolphin/moicheck-amalinux:$CI_COMMIT_REF_SLUG" .
-    - docker push lasdolphin/moicheck-amalinux
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker build --pull -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG" .
+    - docker push "$CI_REGISTRY_IMAGE"
   only:
     changes:
       - Dockerfile
 
 build-master:
-  image: lasdolphin/moicheck-amalinux:$CI_COMMIT_REF_SLUG
+  image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
   stage: build
   script:
     - cp  /home/moicheck.zip .
@@ -37,7 +37,7 @@ build-master:
       - moicheck.zip
 
 deploy-master:
-  image: lasdolphin/moicheck-amalinux:$CI_COMMIT_REF_SLUG
+  image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
   stage: deploy
   script:
     - aws lambda --region $region update-function-code --function-name $function_name --zip-file fileb://moicheck.zip > /dev/null
