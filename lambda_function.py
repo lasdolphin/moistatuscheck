@@ -36,22 +36,11 @@ FORMAT_MSG = """
 """
 LOCAL_FILE = "/tmp"
 
-def set_logger(lvl):
-
-    if lvl == 'INFO':
-        logging.basicConfig(level=logging.INFO)
-    elif lvl == 'DEBUG':
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.WARN)
-    logger = logging.getLogger(__name__)
-    return logger
-
 def save_update_id(update_id, table_name):
-
+    ''' saves update id from telegramm payload to dynamodb table, returns response from dynamodb '''
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
-    table.update_item(
+    response = table.update_item(
         Key={
             'id': '1'
         },
@@ -60,10 +49,11 @@ def save_update_id(update_id, table_name):
             ':val1': update_id
         }
     )
+    return response
 
 
 def read_update_id(table_name):
-
+    ''' reads update is of latest processed telegramm request, returns update id value '''
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(table_name)
     response = table.get_item(
@@ -75,23 +65,31 @@ def read_update_id(table_name):
 
 
 def toOrdinalNum(n):
-
+    ''' a helper  function that coverts day of month to ordinal value 1st,2nd,3d etc '''
     return str(n) + {1: 'st', 2: 'nd', 3: 'rd'}.get(4 if 10 <= n % 100 < 20 else n % 10, "th")
 
 
 def define_excel_sheet(case_num):
-
+    ''' defines correct source excel sheet index based on application number part, returns  excel sheet index '''
+    case_types = {
+    'DP': 0,
+    'PP': 0,
+    'DV': 0,
+    'ZM': 1,
+    'TP': 2
+    }
     case_type = case_num.split('/')[1].split('-')[0]
     return case_types[case_type]
 
 
 def check_format(case_num):
-
+    ''' check input of application number to match required format regexp, returns boolean value '''
     pattern = re.compile('^OAM-[^0]\d+/(DP|PP|DV|ZM|TP)-\d{4}$')
     return bool(pattern.match(case_num))
 
-def empty_bucket(bucket_name):
 
+def empty_bucket(bucket_name):
+    ''' removes all files  from tmp s3 bucket, returns  True if bucket is empty, False if exeption was caught '''
     logger.info('Clean up in bucket {}'.format(bucket_name))
     s3 = boto3.resource('s3')
     try:
@@ -105,7 +103,8 @@ def empty_bucket(bucket_name):
 
 
 def source_file_url():
-
+    ''' Takes current date to compile a source file url and checks for hhtp headed
+        if 404 takes previous day and repeat. Returns valis url, and filename from hypermedia header '''
     revert_days = 0
     month = datetime.datetime.today().strftime("%B").lower()
     year = datetime.datetime.today().strftime("%Y")
@@ -123,20 +122,11 @@ def source_file_url():
             logger.info('Checking previous day')
             revert_days += 1
 
-
-def source_file_S3(filename, url, bucket_name):
-
-    s3 = boto3.resource('s3')
-    try:
-        s3.Bucket(bucket_name).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
-        logger.info('File taken from s3 bucket {}'.format(bucket_name))
-        return "{}/{}".format(LOCAL_FILE, filename)
-    except botocore.exceptions.ClientError as e:
-        return source_file_download(filename, url, bucket_name)
-
-
 def source_file_download(filename, url, bucket_name):
-
+    ''' Accepts filename, url and  s3 bucket name to store
+        Gets  fileobject from url and saves it to /tmp/{filename} on disk.
+        Empties s3 bucket and saves downloaded file.
+        Returns file path'''
     logger.info("Downloading source file from website")
     s3 = boto3.client('s3')
     # logger.info(page.getcode())
@@ -153,8 +143,24 @@ def source_file_download(filename, url, bucket_name):
     return "{}/{}".format(LOCAL_FILE, filename)
 
 
-def source_file_process(tmp_file, target):
+def source_file_S3(filename, url, bucket_name):
+    ''' Tries to get filename from s3 and save it to tmp
+        If success returns local path
+        If failure downlodas  file from web'''
+    s3 = boto3.resource('s3')
+    try:
+        s3.Bucket(bucket_name).download_file(filename, "{}/{}".format(LOCAL_FILE, filename))
+        logger.info('File taken from s3 bucket {}'.format(bucket_name))
+        return "{}/{}".format(LOCAL_FILE, filename)
+    except botocore.exceptions.ClientError as e:
+        return source_file_download(filename, url, bucket_name)
 
+
+
+
+def source_file_process(tmp_file, target):
+    ''' Uses  pandas to find target in tmp_file defining excel sheet in beetween
+        Returns reply message  '''
     logger.info('Case type is {}.'.format(define_excel_sheet(target)))
     sheet_num = define_excel_sheet(target)
     df = pd.read_excel(tmp_file, sheet_name=sheet_num, index_col=0, skiprows=6, names=['a','b'])
@@ -172,9 +178,11 @@ def source_file_process(tmp_file, target):
     return answer
 
 
-def send_reply(a, chat_id):
+def send_reply(a, chat_id, token):
+    ''' Sends reply via telegram to accepted chat_id
+        Returns telegram api reply json'''
     logger.info('Sending reply to {}'.format(chat_id))
-    tlg_endpoint = "https://api.telegram.org/bot{}/sendMessage".format(os.environ['TOKEN'])
+    tlg_endpoint = "https://api.telegram.org/bot{}/sendMessage".format(token)
     post_fields = {'chat_id': chat_id, 'text': a}
     request = Request(tlg_endpoint, urlencode(post_fields).encode())
     json = urlopen(request).read().decode()
@@ -183,6 +191,7 @@ def send_reply(a, chat_id):
 
 
 def main(target, chat_id):
+    ''' main sequence of application '''
     token = os.environ['TOKEN']
     bucket_name = os.environ['BUCKET']
 
@@ -190,14 +199,22 @@ def main(target, chat_id):
     path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
     print(answer)
+    # send reply to telegram only on lambda run
     if __name__ != "__main__":
-        send_reply(answer, chat_id)
+        send_reply(answer, chat_id, token)
 
 
 def lambda_handler(event, context):
-
+    ''' this function is entrypoint for aws lambda function
+        calling function main which wraps the main sequence
+        Update_id check is needed if you are not returning OK 200 to telegram api.
+        If telegram gets ok 200 it removes message from queue, otherwise message lives  about 24 hours
+        In this case  you need to track update id to avoid multiple processing of same messages.
+        NOTE. THis code won't work if  you set up aws api gateway from lamda,
+        in this case it uses proxy and event parameter structure changes
+        TODO. process both event structures.
+        '''
     table_name = os.environ['DB_TABLE_NAME']
-
     logger.info(event)
     if event['update_id'] > read_update_id(table_name):
         save_update_id(int(event['update_id']), table_name)
@@ -213,6 +230,7 @@ def lambda_handler(event, context):
         logger.info('This is already processed')
 
 if __name__ == "__main__":
+
     # setting up logger for local run
     lvl = os.environ['LOGLEVEL']
     if lvl == 'INFO':
