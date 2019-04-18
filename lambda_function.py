@@ -12,22 +12,6 @@ import datetime
 import shutil
 import logging
 
-
-
-
-#x 1. add functionality to pick up correct sheet.
-#x 5. reverse date picking
-#x 4. send result to telegram
-#x 2. Interpret filter result
-#c 3. read excel on the fly
-
-case_types = {
-    'DP': 0,
-    'PP': 0,
-    'DV': 0,
-    'ZM': 1,
-    'TP': 2
-}
 FORMAT_MSG = """
     Format seems to be incorrect.
     Example: If receipt number of your application is OAM-0334-5/PP-2015,
@@ -213,7 +197,7 @@ def lambda_handler(event, context):
         NOTE. THis code won't work if  you set up aws api gateway from lamda,
         in this case it uses proxy and event parameter structure changes
         TODO. process both event structures.
-        '''
+    '''
     table_name = os.environ['DB_TABLE_NAME']
     logger.info(event)
     if event['update_id'] > read_update_id(table_name):
