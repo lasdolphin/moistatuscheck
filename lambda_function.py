@@ -20,6 +20,20 @@ FORMAT_MSG = """
 """
 LOCAL_FILE = "/tmp"
 
+lvl = os.environ['LOGLEVEL']
+
+def logger_init():
+    ''' Setting up logger basic config or logger set level depending on where this code is running.
+    In ot outside main function. Considering outside main means code is running on aws lambda '''
+    is_main = __name__ == "__main__"
+    print(is_main)
+    if lvl == 'INFO':
+        logging.basicConfig(level=logging.INFO) if is_main else logger.setLevel(logging.INFO)
+    elif lvl == 'DEBUG':
+        logging.basicConfig(level=logging.DEBUG) if is_main else logger.setLevel(logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARN) if is_main else logger.setLevel(logging.WARN)
+
 def save_update_id(update_id, table_name):
     ''' saves update id from telegramm payload to dynamodb table, returns response from dynamodb '''
     dynamodb = boto3.resource('dynamodb')
@@ -48,7 +62,7 @@ def read_update_id(table_name):
     return response['Item']['update_id']
 
 
-def toOrdinalNum(n):
+def to_ordinal_num(n):
     ''' a helper  function that coverts day of month to ordinal value 1st,2nd,3d etc '''
     return str(n) + {1: 'st', 2: 'nd', 3: 'rd'}.get(4 if 10 <= n % 100 < 20 else n % 10, "th")
 
@@ -94,7 +108,7 @@ def source_file_url():
     year = datetime.datetime.today().strftime("%Y")
 
     while True:
-        day = toOrdinalNum(int(datetime.datetime.today().strftime("%d"))-revert_days)
+        day = to_ordinal_num(int(datetime.datetime.today().strftime("%d"))-revert_days)
         url = "https://www.mvcr.cz/mvcren/file/list-valid-to-the-{}-{}-{}.aspx".format(month,day,year)
         logger.info(url)
         try:
@@ -176,6 +190,7 @@ def send_reply(a, chat_id, token):
 
 def main(target, chat_id):
     ''' main sequence of application '''
+    logger.warning('Logging set to {}'.format(lvl))
     token = os.environ['TOKEN']
     bucket_name = os.environ['BUCKET']
 
@@ -213,18 +228,12 @@ def lambda_handler(event, context):
     else:
         logger.info('This is already processed')
 
+
 if __name__ == "__main__":
 
     # setting up logger for local run
-    lvl = os.environ['LOGLEVEL']
-    if lvl == 'INFO':
-        logging.basicConfig(level=logging.INFO)
-    elif lvl == 'DEBUG':
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.WARN)
+    logger_init()
     logger = logging.getLogger()
-    logger.warning('Logging set to {}'.format(lvl))
 
     # parsing args
     parser = argparse.ArgumentParser()
@@ -241,12 +250,5 @@ if __name__ == "__main__":
         print(FORMAT_MSG)
 else:
     # setting up logger for lambda
-    lvl = os.environ['LOGLEVEL']
     logger = logging.getLogger()
-    if lvl == 'INFO':
-        logger.setLevel(logging.INFO)
-    elif lvl == 'DEBUG':
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.WARN)
-    logger.warning('Logging set to {}'.format(lvl))
+    logger_init()
