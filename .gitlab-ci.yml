@@ -43,3 +43,9 @@ deploy-master:
     - aws lambda --region $region update-function-code --function-name $function_name --zip-file fileb://moicheck.zip > /dev/null
   dependencies:
     - build-master
+
+smoketest-master:
+  image: python:3.6
+  script:
+    - pip install unittest
+    - python3 -m unittest smoke_tests.TestLambda

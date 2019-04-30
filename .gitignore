@@ -1,3 +1,4 @@
 *.zip
+*.pyc
 test_data.txt
 envs.sh
