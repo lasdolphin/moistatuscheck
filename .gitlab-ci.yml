@@ -9,6 +9,7 @@ stages:
   - image
   - build
   - deploy
+  - smoketest
 
 image-docker:
   image: docker:latest
