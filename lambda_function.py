@@ -224,9 +224,11 @@ def lambda_handler(event, context):
             logger.info('Format OK. Starting...')
             main(target, chat_id, token)
         else:
-            return send_reply(FORMAT_MSG, chat_id, token)
+            send_reply(FORMAT_MSG, chat_id, token)
+            return FORMAT_MSG
     else:
         logger.info('This is already processed')
+        return 'This is processed'
 
 
 if __name__ == "__main__":
