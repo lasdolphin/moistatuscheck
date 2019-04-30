@@ -46,6 +46,7 @@ deploy-master:
 
 smoketest-master:
   image: python:3.6
+  stage: smoketest
   script:
     - pip install unittest
     - python3 -m unittest smoke_tests.TestLambda
