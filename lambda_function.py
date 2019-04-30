@@ -188,7 +188,7 @@ def send_reply(a, chat_id, token):
     return json
 
 
-def main(target, chat_id, token):
+def main(target, chat_id, token, dry_run):
     ''' main sequence of application '''
     logger.warning('Logging set to {}'.format(lvl))
     bucket_name = os.environ['BUCKET']
@@ -197,7 +197,7 @@ def main(target, chat_id, token):
     path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
     # send reply to telegram only on lambda run
-    if __name__ != "__main__":
+    if not dry_run:
         return send_reply(answer, chat_id, token)
     else:
         return answer
@@ -213,6 +213,8 @@ def lambda_handler(event, context):
         in this case it uses proxy and event parameter structure changes
         TODO. process both event structures.
     '''
+    #this is not to send messages on integration tests
+    dry_run = bool(event['dry'])
     table_name = os.environ['DB_TABLE_NAME']
     logger.info(event)
     # if event['update_id'] > read_update_id(table_name):
@@ -223,10 +225,11 @@ def lambda_handler(event, context):
     logger.info('Checking format')
     if check_format(target):
         logger.info('Format OK. Starting...')
-        repl = main(target, chat_id, token)
+        repl = main(target, chat_id, token, dry_run)
         return repl
     else:
-        return send_reply(FORMAT_MSG, chat_id, token)
+        if not dry_run:
+            return send_reply(FORMAT_MSG, chat_id, token)
     # else:
     #     logger.info('This is already processed')
     #     return 'This is processed'
@@ -237,6 +240,7 @@ if __name__ == "__main__":
     # setting up logger for local run
     logger_init()
     logger = logging.getLogger()
+    dry_run = True
     token = os.environ['TOKEN']
 
     # parsing args
@@ -249,7 +253,7 @@ if __name__ == "__main__":
 
     if check_format(args.target.upper()):
         print('Looking for {}'.format(args.target))
-        repl = main(args.target.upper(), args.chat_id, token)
+        repl = main(args.target.upper(), args.chat_id, token, dry_run)
         print(repl)
     else:
         print(FORMAT_MSG)
