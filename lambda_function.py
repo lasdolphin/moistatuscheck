@@ -230,6 +230,8 @@ def lambda_handler(event, context):
     else:
         if not dry_run:
             return send_reply(FORMAT_MSG, chat_id, token)
+        else:
+            return FORMAT_MSG
     # else:
     #     logger.info('This is already processed')
     #     return 'This is processed'
