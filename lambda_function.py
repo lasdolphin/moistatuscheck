@@ -196,10 +196,11 @@ def main(target, chat_id, token):
     filename, url = source_file_url()
     path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
-    return answer
     # send reply to telegram only on lambda run
     if __name__ != "__main__":
         return send_reply(answer, chat_id, token)
+    else:
+        return answer
 
 
 def lambda_handler(event, context):
