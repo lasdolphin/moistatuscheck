@@ -34,32 +34,32 @@ def logger_init():
     else:
         logging.basicConfig(level=logging.WARN) if is_main else logger.setLevel(logging.WARN)
 
-def save_update_id(update_id, table_name):
-    ''' saves update id from telegramm payload to dynamodb table, returns response from dynamodb '''
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(table_name)
-    response = table.update_item(
-        Key={
-            'id': '1'
-        },
-        UpdateExpression='SET update_id = :val1',
-        ExpressionAttributeValues={
-            ':val1': update_id
-        }
-    )
-    return response
+# def save_update_id(update_id, table_name):
+#     ''' saves update id from telegramm payload to dynamodb table, returns response from dynamodb '''
+#     dynamodb = boto3.resource('dynamodb')
+#     table = dynamodb.Table(table_name)
+#     response = table.update_item(
+#         Key={
+#             'id': '1'
+#         },
+#         UpdateExpression='SET update_id = :val1',
+#         ExpressionAttributeValues={
+#             ':val1': update_id
+#         }
+#     )
+#     return response
 
 
-def read_update_id(table_name):
-    ''' reads update is of latest processed telegramm request, returns update id value '''
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(table_name)
-    response = table.get_item(
-        Key={
-            'id': '1',
-        }
-    )
-    return response['Item']['update_id']
+# def read_update_id(table_name):
+#     ''' reads update is of latest processed telegramm request, returns update id value '''
+#     dynamodb = boto3.resource('dynamodb')
+#     table = dynamodb.Table(table_name)
+#     response = table.get_item(
+#         Key={
+#             'id': '1',
+#         }
+#     )
+#     return response['Item']['update_id']
 
 
 def to_ordinal_num(n):
@@ -215,21 +215,21 @@ def lambda_handler(event, context):
     '''
     table_name = os.environ['DB_TABLE_NAME']
     logger.info(event)
-    if event['update_id'] > read_update_id(table_name):
-        save_update_id(int(event['update_id']), table_name)
-        chat_id = event['message']['chat']['id']
-        target = event['message']['text'].upper()
-        token = os.environ['TOKEN']
-        logger.info('Checking format')
-        if check_format(target):
-            logger.info('Format OK. Starting...')
-            repl = main(target, chat_id, token)
-            return repl
-        else:
-            return send_reply(FORMAT_MSG, chat_id, token)
+    # if event['update_id'] > read_update_id(table_name):
+    #     save_update_id(int(event['update_id']), table_name)
+    chat_id = event['message']['chat']['id']
+    target = event['message']['text'].upper()
+    token = os.environ['TOKEN']
+    logger.info('Checking format')
+    if check_format(target):
+        logger.info('Format OK. Starting...')
+        repl = main(target, chat_id, token)
+        return repl
     else:
-        logger.info('This is already processed')
-        return 'This is processed'
+        return send_reply(FORMAT_MSG, chat_id, token)
+    # else:
+    #     logger.info('This is already processed')
+    #     return 'This is processed'
 
 
 if __name__ == "__main__":
