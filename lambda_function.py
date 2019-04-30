@@ -196,10 +196,10 @@ def main(target, chat_id, token):
     filename, url = source_file_url()
     path = source_file_S3(filename, url, bucket_name)
     answer = source_file_process(path, target)
-    print(answer)
+    return answer
     # send reply to telegram only on lambda run
     if __name__ != "__main__":
-        send_reply(answer, chat_id, token)
+        return send_reply(answer, chat_id, token)
 
 
 def lambda_handler(event, context):
@@ -222,10 +222,10 @@ def lambda_handler(event, context):
         logger.info('Checking format')
         if check_format(target):
             logger.info('Format OK. Starting...')
-            main(target, chat_id, token)
+            repl = main(target, chat_id, token)
+            return repl
         else:
-            send_reply(FORMAT_MSG, chat_id, token)
-            return "Success"
+            return send_reply(FORMAT_MSG, chat_id, token)
     else:
         logger.info('This is already processed')
         return 'This is processed'
@@ -248,7 +248,8 @@ if __name__ == "__main__":
 
     if check_format(args.target.upper()):
         print('Looking for {}'.format(args.target))
-        main(args.target.upper(), args.chat_id, token)
+        repl = main(args.target.upper(), args.chat_id, token)
+        print(repl)
     else:
         print(FORMAT_MSG)
 else:
