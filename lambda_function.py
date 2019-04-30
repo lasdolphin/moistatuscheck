@@ -188,10 +188,9 @@ def send_reply(a, chat_id, token):
     return json
 
 
-def main(target, chat_id):
+def main(target, chat_id, token):
     ''' main sequence of application '''
     logger.warning('Logging set to {}'.format(lvl))
-    token = os.environ['TOKEN']
     bucket_name = os.environ['BUCKET']
 
     filename, url = source_file_url()
@@ -219,12 +218,13 @@ def lambda_handler(event, context):
         save_update_id(int(event['update_id']), table_name)
         chat_id = event['message']['chat']['id']
         target = event['message']['text'].upper()
+        token = os.environ['TOKEN']
         logger.info('Checking format')
         if check_format(target):
             logger.info('Format OK. Starting...')
-            main(target, chat_id)
+            main(target, chat_id, token)
         else:
-            return send_reply(FORMAT_MSG, chat_id)
+            return send_reply(FORMAT_MSG, chat_id, token)
     else:
         logger.info('This is already processed')
 
@@ -234,6 +234,7 @@ if __name__ == "__main__":
     # setting up logger for local run
     logger_init()
     logger = logging.getLogger()
+    token = os.environ['TOKEN']
 
     # parsing args
     parser = argparse.ArgumentParser()
@@ -245,7 +246,7 @@ if __name__ == "__main__":
 
     if check_format(args.target.upper()):
         print('Looking for {}'.format(args.target))
-        main(args.target.upper(), args.chat_id)
+        main(args.target.upper(), args.chat_id, token)
     else:
         print(FORMAT_MSG)
 else:
