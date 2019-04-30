@@ -46,8 +46,7 @@ deploy-master:
     - build-master
 
 smoketest-master:
-  image: python:3.6
+  image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
   stage: smoketest
   script:
-    - pip install unittest
     - python3 -m unittest smoke_tests.TestLambda
