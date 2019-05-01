@@ -103,12 +103,15 @@ def empty_bucket(bucket_name):
 def source_file_url():
     ''' Takes current date to compile a source file url and checks for hhtp headed
         if 404 takes previous day and repeat. Returns valis url, and filename from hypermedia header '''
-    revert_days = 0
-    month = datetime.datetime.today().strftime("%B").lower()
-    year = datetime.datetime.today().strftime("%Y")
+    delta = datetime.timedelta(days=1)
+    date = datetime.datetime.today()
+    # month = datetime.date.today().strftime("%B").lower()
+    # year = datetime.date.today().strftime("%Y")
 
     while True:
-        day = to_ordinal_num(int(datetime.datetime.today().strftime("%d"))-revert_days)
+        day = to_ordinal_num(int(date.strftime("%d")))
+        month = date.strftime("%B").lower()
+        year = date.strftime("%Y")
         url = "https://www.mvcr.cz/mvcren/file/list-valid-to-the-{}-{}-{}.aspx".format(month,day,year)
         logger.info(url)
         try:
@@ -118,7 +121,7 @@ def source_file_url():
         except HTTPError as e:
             logger.info('{}'.format(e))
             logger.info('Checking previous day')
-            revert_days += 1
+            date = date - delta
 
 def source_file_download(filename, url, bucket_name):
     ''' Accepts filename, url and  s3 bucket name to store
