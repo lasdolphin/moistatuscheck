@@ -217,7 +217,7 @@ def lambda_handler(event, context):
         TODO. process both event structures.
     '''
     #this is not to send messages on integration tests
-    dry_run = bool(event['dry'])
+    dry_run = bool(event.get('dry', 0))
     table_name = os.environ['DB_TABLE_NAME']
     logger.info(event)
     # if event['update_id'] > read_update_id(table_name):
