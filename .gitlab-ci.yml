@@ -49,5 +49,5 @@ smoketest-master:
   image: python:3.7.3-alpine3.9
   stage: smoketest
   script:
-    - pip install boto3
+    - pip install boto3 --quiet
     - python3 -m unittest smoke_tests.TestLambda
