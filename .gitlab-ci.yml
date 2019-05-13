@@ -8,6 +8,7 @@ variables:
 stages:
   - image
   - build
+  - unittest
   - deploy
   - smoketest
 
@@ -36,6 +37,13 @@ build-master:
   artifacts:
     paths:
       - moicheck.zip
+
+test-master:
+  image: python:3.7.3-alpine3.9
+  stage: unittest
+  script:
+    - echo "Unittests placeholder"
+    - exit 0
 
 deploy-master:
   image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
